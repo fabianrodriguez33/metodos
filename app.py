@@ -1,7 +1,7 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import math
 from sympy import symbols, diff, sympify, lambdify
 
@@ -42,7 +42,7 @@ if opcion == "Problemas de la guía":
     else:
         st.sidebar.info("Problema 3: Rendimiento de servidor")
         funcion_str = "exp(-x) - x**2 + 0.2"
-        x0_default = 0.75      # ajustado: f(0)*f(1) NO cambia de signo cerca de la raíz real
+        x0_default = 0.75
         x1_default = 1.0
 else:
     funcion_str = st.sidebar.text_input(
@@ -58,11 +58,11 @@ st.sidebar.subheader("📊 Parámetros")
 if metodo == "Secante":
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        x0 = st.number_input("x₀ (inicial):", value=x0_default, format="%.4f")
+        x0 = st.number_input("x₀ (inicial):", value=x0_default, format="%.6f")
     with col2:
-        x1 = st.number_input("x₁ (segundo):", value=x1_default, format="%.4f")
+        x1 = st.number_input("x₁ (segundo):", value=x1_default, format="%.6f")
 else:
-    x0 = st.number_input("Valor inicial x₀:", value=x0_default, format="%.4f")
+    x0 = st.number_input("Valor inicial x₀:", value=x0_default, format="%.6f")
     x1 = None
 
 epsilon = st.sidebar.slider("Tolerancia εa (%):", 0.001, 1.0, 0.01, 0.001) / 100
@@ -70,15 +70,9 @@ max_iter = st.sidebar.slider("Máximo de iteraciones:", 10, 100, 50, 5)
 
 
 # ============================================================
-# MÉTODO DEL PUNTO FIJO — CORREGIDO
+# MÉTODO DEL PUNTO FIJO
 # ============================================================
 def punto_fijo(func_str, x0, epsilon, max_iter):
-    """
-    x_{n+1} = g(x_n).
-    CORRECCIÓN: cuando se cumple el criterio de parada, se agrega
-    una fila final con el valor CONVERGIDO (x_n1), no solo con el
-    valor anterior. Así la tabla siempre coincide con la raíz reportada.
-    """
     x = symbols('x')
     g_expr = sympify(func_str)
     g = lambdify(x, g_expr, modules=['numpy', 'math'])
@@ -88,7 +82,6 @@ def punto_fijo(func_str, x0, epsilon, max_iter):
 
     iteraciones = []
     x_n = x0
-    # Fila 0: valor inicial, sin error definido todavía
     iteraciones.append({'Iteración': 0, 'x_n': x_n,
                          'f(x_n)': x_n - g(x_n), 'Error %': np.nan})
 
@@ -96,7 +89,7 @@ def punto_fijo(func_str, x0, epsilon, max_iter):
         try:
             x_n1 = g(x_n)
             error = abs(x_n1 - x_n) / abs(x_n1) if x_n1 != 0 else 0.0
-            f_x = x_n1 - g(x_n1)  # f(x_n1) = x_n1 - g(x_n1)
+            f_x = x_n1 - g(x_n1)
 
             iteraciones.append({'Iteración': i, 'x_n': x_n1,
                                  'f(x_n)': f_x, 'Error %': error * 100})
@@ -109,20 +102,13 @@ def punto_fijo(func_str, x0, epsilon, max_iter):
             break
 
     df = pd.DataFrame(iteraciones)
-    raiz = x_n
-    return df, raiz, g_prime(raiz)
+    return df, x_n, g_prime(x_n)
 
 
 # ============================================================
-# MÉTODO DE NEWTON-RAPHSON — CORREGIDO
+# MÉTODO DE NEWTON-RAPHSON
 # ============================================================
 def newton_raphson(func_str, x0, epsilon, max_iter):
-    """
-    x_{n+1} = x_n - f(x_n)/f'(x_n).
-    CORRECCIÓN: se agrega la fila con el valor convergido antes de
-    salir del bucle, y se evita el NameError si la derivada se anula
-    en la primera iteración.
-    """
     x = symbols('x')
     f_expr = sympify(func_str)
     f = lambdify(x, f_expr, modules=['numpy', 'math'])
@@ -158,18 +144,13 @@ def newton_raphson(func_str, x0, epsilon, max_iter):
             break
 
     df = pd.DataFrame(iteraciones)
-    raiz = x_n
-    return df, raiz, str(f_prime_expr)
+    return df, x_n, str(f_prime_expr)
 
 
 # ============================================================
-# MÉTODO DE LA SECANTE — CORREGIDO
+# MÉTODO DE LA SECANTE
 # ============================================================
 def secante(func_str, x0, x1, epsilon, max_iter):
-    """
-    x_{n+1} = x_n - f(x_n)*(x_n - x_{n-1}) / (f(x_n) - f(x_{n-1})).
-    CORRECCIÓN: se agrega la fila con el valor convergido antes de salir.
-    """
     x = symbols('x')
     f_expr = sympify(func_str)
     f = lambdify(x, f_expr, modules=['numpy', 'math'])
@@ -201,8 +182,7 @@ def secante(func_str, x0, x1, epsilon, max_iter):
             break
 
     df = pd.DataFrame(iteraciones)
-    raiz = x_n
-    return df, raiz
+    return df, x_n
 
 
 st.markdown("---")
@@ -213,11 +193,9 @@ if st.sidebar.button("🚀 Calcular", type="primary", use_container_width=True):
 
     if metodo == "Punto Fijo":
         df, raiz, g_prime_val = punto_fijo(funcion_str, x0, epsilon, max_iter)
-
         st.success(f"✅ **Raíz encontrada:** {raiz:.6f}")
         st.info(f"📐 **Función de iteración:** g(x) = {funcion_str}")
         st.info(f"📐 **Derivada g'(x) en la raíz:** {abs(g_prime_val):.6f}")
-
         if abs(g_prime_val) < 1:
             st.success("✅ **Convergencia garantizada:** |g'(x)| < 1")
         else:
@@ -225,47 +203,79 @@ if st.sidebar.button("🚀 Calcular", type="primary", use_container_width=True):
 
     elif metodo == "Newton-Raphson":
         df, raiz, derivada = newton_raphson(funcion_str, x0, epsilon, max_iter)
-
         st.success(f"✅ **Raíz encontrada:** {raiz:.6f}")
         st.info(f"📐 **Función:** f(x) = {funcion_str}")
         st.info(f"📐 **Derivada:** f'(x) = {derivada}")
 
-    else:  # Secante — CORREGIDO: usaba func_str (no existía)
+    else:  # Secante
         df, raiz = secante(funcion_str, x0, x1, epsilon, max_iter)
-
         st.success(f"✅ **Raíz encontrada:** {raiz:.6f}")
         st.info(f"📐 **Función:** f(x) = {funcion_str}")
 
+    # ---------------------------------------------------------
+    # TABLA CON 6 DECIMALES EXACTOS (column_config, sin redondeo
+    # silencioso de pandas y sin perder precisión al mostrar)
+    # ---------------------------------------------------------
     st.markdown("### 📋 Tabla de Iteraciones")
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(
+        df,
+        use_container_width=True,
+        column_config={
+            "Iteración": st.column_config.NumberColumn("Iteración", format="%d"),
+            "x_n": st.column_config.NumberColumn("x_n", format="%.6f"),
+            "f(x_n)": st.column_config.NumberColumn("f(x_n)", format="%.6e"),
+            "Error %": st.column_config.NumberColumn("Error %", format="%.6f"),
+        },
+        hide_index=True
+    )
 
-    st.markdown("### 📊 Gráfica de Convergencia")
+    # ---------------------------------------------------------
+    # GRÁFICAS INTERACTIVAS CON PLOTLY (NO son imágenes estáticas)
+    # Al pasar el mouse sobre cada punto se ve el valor EXACTO
+    # con 6 decimales, sin depender de la resolución de un PNG.
+    # ---------------------------------------------------------
+    st.markdown("### 📊 Gráfica de Convergencia (interactiva)")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        fig1, ax1 = plt.subplots(figsize=(10, 6))
-        # se omite la fila 0 (error NaN) al graficar el error
         df_err = df.dropna(subset=['Error %'])
-        ax1.plot(df_err['Iteración'], df_err['Error %'], 'bo-', linewidth=2, markersize=8)
-        ax1.set_xlabel('Iteración', fontsize=12)
-        ax1.set_ylabel('Error Relativo (%)', fontsize=12)
-        ax1.set_title('Error vs Iteración', fontsize=14, fontweight='bold')
-        ax1.set_yscale('log')
-        ax1.grid(True, alpha=0.3)
-        ax1.axhline(y=epsilon * 100, color='r', linestyle='--',
-                     label=f'Tolerancia ({epsilon*100:.3f}%)')
-        ax1.legend()
-        st.pyplot(fig1)
+        fig1 = go.Figure()
+        fig1.add_trace(go.Scatter(
+            x=df_err['Iteración'], y=df_err['Error %'],
+            mode='lines+markers',
+            marker=dict(size=9, color='royalblue'),
+            line=dict(width=2),
+            name='Error %',
+            hovertemplate='Iteración %{x}<br>Error = %{y:.6f} %<extra></extra>'
+        ))
+        fig1.add_hline(
+            y=epsilon * 100, line_dash="dash", line_color="red",
+            annotation_text=f"Tolerancia ({epsilon*100:.6f}%)"
+        )
+        fig1.update_yaxes(type="log", title="Error Relativo (%) [escala log]")
+        fig1.update_xaxes(title="Iteración", dtick=1)
+        fig1.update_layout(title="Error vs Iteración", height=450)
+        st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        fig2, ax2 = plt.subplots(figsize=(10, 6))
-        ax2.plot(df['Iteración'], df['x_n'], 'go-', linewidth=2, markersize=8)
-        ax2.set_xlabel('Iteración', fontsize=12)
-        ax2.set_ylabel('Valor de x', fontsize=12)
-        ax2.set_title('Convergencia de x', fontsize=14, fontweight='bold')
-        ax2.grid(True, alpha=0.3)
-        st.pyplot(fig2)
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(
+            x=df['Iteración'], y=df['x_n'],
+            mode='lines+markers',
+            marker=dict(size=9, color='seagreen'),
+            line=dict(width=2),
+            name='x_n',
+            hovertemplate='Iteración %{x}<br>x_n = %{y:.6f}<extra></extra>'
+        ))
+        fig2.add_hline(
+            y=raiz, line_dash="dash", line_color="orange",
+            annotation_text=f"Raíz ≈ {raiz:.6f}"
+        )
+        fig2.update_xaxes(title="Iteración", dtick=1)
+        fig2.update_yaxes(title="Valor de x")
+        fig2.update_layout(title="Convergencia de x", height=450)
+        st.plotly_chart(fig2, use_container_width=True)
 
     st.markdown("### 🔍 Análisis de Resultados")
 
@@ -280,13 +290,13 @@ if st.sidebar.button("🚀 Calcular", type="primary", use_container_width=True):
     if opcion == "Problemas de la guía":
         st.markdown("#### 📝 Interpretación Física")
         if metodo == "Punto Fijo":
-            st.info(f"La temperatura de equilibrio del centro de datos es **{raiz:.2f}°C**, "
+            st.info(f"La temperatura de equilibrio del centro de datos es **{raiz:.6f}°C**, "
                     f"dentro del rango óptimo para servidores (18-27°C).")
         elif metodo == "Newton-Raphson":
-            st.info(f"El tiempo de respuesta del sistema de almacenamiento es **{raiz:.2f} ms**, "
+            st.info(f"El tiempo de respuesta del sistema de almacenamiento es **{raiz:.6f} ms**, "
                     f"indicando una condición operativa eficiente.")
         else:
-            st.info(f"El nivel de carga normalizado del servidor es **{raiz:.4f}**, "
+            st.info(f"El nivel de carga normalizado del servidor es **{raiz:.6f}**, "
                     f"representando el punto óptimo de operación.")
 
 st.markdown("---")
