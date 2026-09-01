@@ -23,7 +23,7 @@ st.sidebar.header("⚙️ Configuración Global")
 sesion = st.sidebar.selectbox(
     "Selecciona la Sesión:",
     ["Sesión 3: Ecuaciones No Lineales", "Sesión 4: Raíces de Polinomios (Müller)"],
-    index=1 # Por defecto mostramos la Sesión 4
+    index=1 
 )
 
 st.sidebar.markdown("---")
@@ -140,10 +140,21 @@ def evaluar_polinomio(coeffs, z):
         resultado = resultado * z + coeffs[i]
     return resultado
 
+def fmt_tabla(val):
+    """Formatea números reales o complejos limpiamente para la tabla"""
+    if isinstance(val, complex) and abs(val.imag) > 1e-6:
+        return f"{val.real:.5f} {'+' if val.imag >= 0 else '-'} {abs(val.imag):.5f}j"
+    return f"{val.real:.5f}" if isinstance(val, complex) else f"{val:.5f}"
+
 def muller(coeffs, z0, z1, z2, tol, max_iter):
     historial = []
     z3 = z2
     for i in range(max_iter):
+        # Guardamos los valores ANTES de calcular z3 para la tabla del profesor
+        x_i = z0
+        x_i1 = z1
+        x_i2 = z2
+        
         f0 = evaluar_polinomio(coeffs, z0)
         f1 = evaluar_polinomio(coeffs, z1)
         f2 = evaluar_polinomio(coeffs, z2)
@@ -167,13 +178,22 @@ def muller(coeffs, z0, z1, z2, tol, max_iter):
         z3 = z2 - (2 * c) / denom
         error = abs(z3 - z2)
         
-        z3_str = f"{z3.real:.6f} {'+' if z3.imag >= 0 else '-'} {abs(z3.imag):.6f}j" if isinstance(z3, complex) else f"{z3:.6f}"
-        historial.append({'Iteración': i + 1, 'z₃ (Aproximación)': z3_str, 'Error Relativo': f"{error:.2e}"})
+        # Tabla exacta que pide el profesor: i | xi | xi+1 | xi+2 | xi+3 | Error
+        historial.append({
+            'i': i + 1, 
+            'x_i': fmt_tabla(x_i), 
+            'x_{i+1}': fmt_tabla(x_i1), 
+            'x_{i+2}': fmt_tabla(x_i2), 
+            'x_{i+3}': fmt_tabla(z3), 
+            'Error |x_{i+3} - x_{i+2}|': f"{error:.2e}"
+        })
         
         if error < tol or abs(evaluar_polinomio(coeffs, z3)) < tol:
             return z3, pd.DataFrame(historial), True
         
+        # Desplazar ventana
         z0, z1, z2 = z1, z2, z3
+        
     return z3, pd.DataFrame(historial), False
 
 def deflacion(coeffs, raiz):
@@ -189,11 +209,9 @@ def fmt(c):
 
 # --- FUNCIONES DE ANÁLISIS TEÓRICO DINÁMICO ---
 def calcular_descartes(coeffs):
-    # Positivas
     signos = [np.sign(c) for c in coeffs if c != 0]
     cambios_pos = sum(1 for i in range(len(signos)-1) if signos[i] != signos[i+1])
     
-    # Negativas (evaluando P(-z))
     n = len(coeffs) - 1
     signos_neg = []
     for i, c in enumerate(coeffs):
@@ -346,9 +364,9 @@ elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
 
     st.sidebar.subheader("📊 Parámetros de Müller")
     col1, col2, col3 = st.sidebar.columns(3)
-    with col1: z0 = st.number_input("z₀:", value=z0_def, format="%.4f")
-    with col2: z1 = st.number_input("z₁:", value=z1_def, format="%.4f")
-    with col3: z2 = st.number_input("z₂:", value=z2_def, format="%.4f")
+    with col1: z0 = st.number_input("z₀ (x_i):", value=z0_def, format="%.4f")
+    with col2: z1 = st.number_input("z₁ (x_{i+1}):", value=z1_def, format="%.4f")
+    with col3: z2 = st.number_input("z₂ (x_{i+2}):", value=z2_def, format="%.4f")
     
     tol = st.sidebar.number_input("Tolerancia (ε):", value=tol_def, format="%.e")
     max_iter = st.sidebar.slider("Máx. iteraciones por raíz:", 10, 100, 50, 5)
@@ -394,8 +412,11 @@ elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
                 raiz, df_iter, convergio = muller(coeffs_actuales, z0, z1, z2, tol, max_iter)
                 
                 if convergio:
-                    st.success(f"✅ Convergió en {len(df_iter)} iteraciones. Raíz: **{fmt(raiz)}**")
+                    st.success(f"✅ Convergió en {len(df_iter)} iteraciones. Raíz encontrada: **{fmt(raiz)}**")
                     raices.append(raiz)
+                    
+                    st.markdown("**📋 Tabla de Convergencia (Ventana de Müller)**")
+                    # Esta es la tabla EXACTA que pide tu profesor
                     st.dataframe(df_iter, use_container_width=True, hide_index=True)
                     
                     coeffs_actuales = deflacion(coeffs_actuales, raiz)
@@ -432,7 +453,6 @@ elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
             ax.fill(np.cos(theta), np.sin(theta), color='green', alpha=0.1)
             
             for i, r in enumerate(raices):
-                # En teoría de control, los polos se grafican con una 'X'
                 ax.plot(r.real, r.imag, 'rx', markersize=10, markeredgewidth=2) 
                 ax.text(r.real + 0.05, r.imag + 0.05, f'$z_{i+1}$', fontsize=12, color='red', fontweight='bold')
                 
