@@ -23,7 +23,7 @@ st.sidebar.header("⚙️ Configuración Global")
 sesion = st.sidebar.selectbox(
     "Selecciona la Sesión:",
     ["Sesión 3: Ecuaciones No Lineales", "Sesión 4: Raíces de Polinomios (Müller)"],
-    index=1 # Por defecto mostramos la Sesión 4 que es tu tarea actual
+    index=1 # Por defecto mostramos la Sesión 4
 )
 
 st.sidebar.markdown("---")
@@ -132,7 +132,7 @@ def secante(func_str, x0, x1, epsilon, max_iter):
     return pd.DataFrame(iteraciones), x_n1
 
 # ==========================================
-# FUNCIONES AUXILIARES (SESIÓN 4 - MÜLLER)
+# FUNCIONES AUXILIARES (SESIÓN 4 - MÜLLER Y TEORÍA)
 # ==========================================
 def evaluar_polinomio(coeffs, z):
     resultado = coeffs[0]
@@ -186,6 +186,52 @@ def fmt(c):
     if isinstance(c, complex) and abs(c.imag) > 1e-6:
         return f"{c.real:.4f} {'+' if c.imag >= 0 else '-'} {abs(c.imag):.4f}j"
     return f"{c.real:.4f}" if isinstance(c, complex) else f"{c:.4f}"
+
+# --- FUNCIONES DE ANÁLISIS TEÓRICO DINÁMICO ---
+def calcular_descartes(coeffs):
+    # Positivas
+    signos = [np.sign(c) for c in coeffs if c != 0]
+    cambios_pos = sum(1 for i in range(len(signos)-1) if signos[i] != signos[i+1])
+    
+    # Negativas (evaluando P(-z))
+    n = len(coeffs) - 1
+    signos_neg = []
+    for i, c in enumerate(coeffs):
+        if c == 0: continue
+        potencia = n - i
+        if potencia % 2 != 0:
+            signos_neg.append(-np.sign(c))
+        else:
+            signos_neg.append(np.sign(c))
+    cambios_neg = sum(1 for i in range(len(signos_neg)-1) if signos_neg[i] != signos_neg[i+1])
+    return cambios_pos, cambios_neg
+
+def calcular_lagrange(coeffs):
+    if coeffs[0] < 0: coeffs = [-c for c in coeffs]
+    a_n = coeffs[0]
+    neg_coeffs = [abs(c) for c in coeffs if c < 0]
+    if not neg_coeffs: return 0.0 
+    K = max(neg_coeffs)
+    k = 0
+    for i in range(1, len(coeffs)):
+        if coeffs[i] < 0:
+            k = i
+            break
+    if k == 0: return 1.0
+    return 1 + (K / a_n)**(1/k)
+
+def formatear_polinomio_latex(coeffs):
+    terms = []
+    n = len(coeffs) - 1
+    for i, c in enumerate(coeffs):
+        if c == 0: continue
+        pot = n - i
+        if pot == 0: terms.append(f"{c:+g}")
+        elif pot == 1: terms.append(f"{c:+g}z")
+        else: terms.append(f"{c:+g}z^{pot}")
+    poly_str = " ".join(terms)
+    if poly_str.startswith("+"): poly_str = poly_str[1:].strip()
+    return poly_str
 
 # ==========================================
 # LÓGICA DE LA INTERFAZ
@@ -277,108 +323,121 @@ if sesion == "Sesión 3: Ecuaciones No Lineales":
 
 elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
     st.markdown("---")
-    st.subheader("📌 Sesión 4: Método de Müller y Análisis de Estabilidad de Filtros IIR")
+    st.subheader("📌 Sesión 4: Raíces de Polinomios y Estabilidad de Sistemas")
+    st.markdown("Herramienta para la búsqueda de raíces (reales y complejas) mediante el Método de Müller, con deflación automática y análisis en el Plano Z.")
     
-    opcion = st.sidebar.radio("Usar problema:", ["GAA: Filtro Digital IIR (Estabilidad)", "Polinomio personalizado"])
+    st.sidebar.subheader("🔧 Configuración del Polinomio")
+    opcion = st.sidebar.radio("Tipo de entrada:", ["Caso de Estudio: Filtro IIR", "Polinomio Personalizado"])
     
-    if opcion == "GAA: Filtro Digital IIR (Estabilidad)":
-        st.sidebar.info("Polinomio: $8z^4 - 6z^3 - 3z^2 + 3z - 1 = 0$")
-        coeffs_default = [8, -6, -3, 3, -1]
-        x0_def, x1_def, x2_def = 0.0, 0.5, 1.0
+    if opcion == "Caso de Estudio: Filtro IIR":
+        st.sidebar.info("Caso de Estudio (Filtro Digital):\n$D(z) = 8z^4 - 6z^3 - 3z^2 + 3z - 1$")
+        coeffs_default = [8.0, -6.0, -3.0, 3.0, -1.0]
+        z0_def, z1_def, z2_def = 0.0, 0.5, 1.0
         tol_def = 1e-5
-        
-        with st.expander("📖 Ayuda Teórica para tu Informe (Descartes y Lagrange)"):
-            st.markdown("""
-            **1. Regla de Descartes:**
-            - $D(z)$ signos: $+8, -6, -3, +3, -1$ → **3 cambios** → 3 o 1 raíces reales positivas.
-            - $D(-z)$ signos: $+8, +6, -3, -3, -1$ → **1 cambio** → Exactamente 1 raíz real negativa.
-            
-            **2. Cota de Lagrange:**
-            - $a_n = 8$, $K = 6$ (mayor valor absoluto negativo), $k = 1$ (distancia al primer negativo).
-            - $B = 1 + \sqrt[1]{6/8} = 1 + 0.75 = \mathbf{1.75}$. Todas las raíces cumplen $|z| \le 1.75$.
-            """)
     else:
-        st.sidebar.info("Ingresa los coeficientes de mayor a menor grado (ej: 1, 0, -3, 0, 2)")
-        coeffs_input = st.sidebar.text_input("Coeficientes (separados por coma):", "1, 0, -3, 0, 2")
+        coeffs_input = st.sidebar.text_input("Coeficientes (de mayor a menor grado, separados por coma):", "1, 0, -3, 0, 2")
         try:
             coeffs_default = [float(c.strip()) for c in coeffs_input.split(",")]
         except:
+            st.sidebar.error("Formato inválido. Usando ejemplo por defecto.")
             coeffs_default = [1.0, 0.0, -3.0, 0.0, 2.0]
-        x0_def, x1_def, x2_def = 0.0, 0.5, 1.0
+        z0_def, z1_def, z2_def = 0.0, 0.5, 1.0
         tol_def = 1e-5
 
     st.sidebar.subheader("📊 Parámetros de Müller")
     col1, col2, col3 = st.sidebar.columns(3)
-    with col1: z0 = st.number_input("z₀:", value=x0_def, format="%.4f")
-    with col2: z1 = st.number_input("z₁:", value=x1_def, format="%.4f")
-    with col3: z2 = st.number_input("z₂:", value=x2_def, format="%.4f")
+    with col1: z0 = st.number_input("z₀:", value=z0_def, format="%.4f")
+    with col2: z1 = st.number_input("z₁:", value=z1_def, format="%.4f")
+    with col3: z2 = st.number_input("z₂:", value=z2_def, format="%.4f")
     
     tol = st.sidebar.number_input("Tolerancia (ε):", value=tol_def, format="%.e")
     max_iter = st.sidebar.slider("Máx. iteraciones por raíz:", 10, 100, 50, 5)
 
     st.markdown("---")
-    if st.sidebar.button("🚀 Calcular Raíces y Estabilidad", type="primary", use_container_width=True):
+    if st.sidebar.button("🚀 Ejecutar Análisis Completo", type="primary", use_container_width=True):
         coeffs_actuales = coeffs_default.copy()
         grado = len(coeffs_actuales) - 1
         raices = []
         
-        st.markdown(f"#### 🔍 Polinomio de grado {grado}: Coeficientes = `{[fmt(c) for c in coeffs_actuales]}`")
+        st.markdown(f"#### 📥 Polinomio de entrada (Grado {grado})")
+        st.latex(f"P(z) = {formatear_polinomio_latex(coeffs_actuales)} = 0")
+        
+        # 1. ANÁLISIS PREVIO (DINÁMICO)
+        st.markdown("### 🧠 1. Delimitación Teórica (Análisis Previo)")
+        st.markdown("*Antes de iterar, el sistema aplica teoremas para predecir la naturaleza de las raíces.*")
+        c_pos, c_neg = calcular_descartes(coeffs_actuales)
+        cota_L = calcular_lagrange(coeffs_actuales)
+        
+        col_t1, col_t2 = st.columns(2)
+        with col_t1:
+            st.markdown("**Regla de los Signos de Descartes**")
+            st.markdown(f"- Variaciones en $P(z)$: **{c_pos}** $\implies$ Raíces positivas: **{c_pos}** (o menos en cantidad par).")
+            st.markdown(f"- Variaciones en $P(-z)$: **{c_neg}** $\implies$ Raíces negativas: **{c_neg}** (o menos en cantidad par).")
+        with col_t2:
+            st.markdown("**Cota Superior de Lagrange**")
+            st.markdown(f"- Módulo máximo estimado: **$|z| \le {cota_L:.4f}$**")
+            st.caption("Garantiza que todas las raíces reales positivas se encuentran dentro de este límite.")
+            
+        st.markdown("---")
+        
+        # 2. BÚSQUEDA NUMÉRICA
+        st.markdown("### ⚙️ 2. Búsqueda Numérica (Müller y Deflación)")
         
         for i in range(grado):
-            st.markdown(f"**Paso {i+1}: Buscando Raíz {i+1}**")
-            
-            if len(coeffs_actuales) == 2: 
-                raiz = -coeffs_actuales[1] / coeffs_actuales[0]
-                raices.append(raiz)
-                st.success(f"✅ Raíz directa (lineal): {fmt(raiz)}")
-                break
+            with st.expander(f"🔍 Paso {i+1}: Búsqueda de la Raíz {i+1} (Grado actual: {len(coeffs_actuales)-1})", expanded=(i==0)):
+                if len(coeffs_actuales) == 2: 
+                    raiz = -coeffs_actuales[1] / coeffs_actuales[0]
+                    raices.append(raiz)
+                    st.success(f"✅ Raíz directa (lineal): **{fmt(raiz)}**")
+                    break
+                    
+                raiz, df_iter, convergio = muller(coeffs_actuales, z0, z1, z2, tol, max_iter)
                 
-            raiz, df_iter, convergio = muller(coeffs_actuales, z0, z1, z2, tol, max_iter)
-            
-            if convergio:
-                st.success(f"✅ Convergió en {len(df_iter)} iteraciones. Raíz: **{fmt(raiz)}**")
-                raices.append(raiz)
-                
-                with st.expander("📋 Ver tabla de convergencia"):
-                    st.dataframe(df_iter, use_container_width=True)
-                
-                coeffs_actuales = deflacion(coeffs_actuales, raiz)
-                st.info(f"➡️ Polinomio deflacionado (grado {len(coeffs_actuales)-1}): `{[fmt(c) for c in coeffs_actuales]}`")
-            else:
-                st.error("❌ No convergió.")
-                break
-
+                if convergio:
+                    st.success(f"✅ Convergió en {len(df_iter)} iteraciones. Raíz: **{fmt(raiz)}**")
+                    raices.append(raiz)
+                    st.dataframe(df_iter, use_container_width=True, hide_index=True)
+                    
+                    coeffs_actuales = deflacion(coeffs_actuales, raiz)
+                    st.info(f"➡️ Polinomio deflacionado resultante: `{[fmt(c) for c in coeffs_actuales]}`")
+                else:
+                    st.error("❌ El método no convergió con los parámetros actuales.")
+                    break
+                    
+        st.markdown("---")
+        
+        # 3. ANÁLISIS DE INGENIERÍA
         if len(raices) == grado:
-            st.markdown("---")
-            st.subheader("📊 Análisis de Estabilidad del Filtro IIR")
-            st.markdown("Condición: El módulo de todas las raíces debe cumplir **$|z| < 1$** (dentro del círculo unitario).")
+            st.markdown("### 📡 3. Análisis de Ingeniería (Estabilidad en el Plano Z)")
+            st.markdown("Para que un sistema discreto (como un filtro IIR) sea estable, todos sus polos (raíces) deben estar estrictamente dentro del círculo unitario: **$|z| < 1$**.")
             
             datos, estable = [], True
             for i, r in enumerate(raices):
                 mod = abs(r)
                 if mod >= 1.0: estable = False
-                r_str = f"{r.real:.4f} {'+' if r.imag >= 0 else '-'} {abs(r.imag):.4f}j" if isinstance(r, complex) else f"{r:.4f}"
-                datos.append({"Raíz": f"z{i+1}", "Valor": r_str, "Módulo |z|": f"{mod:.4f}", "¿Estable?": "✅ SÍ" if mod < 1.0 else "❌ NO"})
+                r_str = f"{r.real:.4f} {'+' if r.imag >= 0 else '-'} {abs(r.imag):.4f}j" if isinstance(r, complex) and abs(r.imag) > 1e-6 else f"{r.real:.4f}"
+                datos.append({"Raíz (Polo)": f"$z_{i+1}$", "Valor": r_str, "Módulo |z|": f"{mod:.5f}", "Estado": "✅ Estable" if mod < 1.0 else "❌ Inestable"})
                 
-            st.dataframe(pd.DataFrame(datos), use_container_width=True)
+            st.dataframe(pd.DataFrame(datos), use_container_width=True, hide_index=True)
             
             if estable:
-                st.success("🎉 **CONCLUSIÓN:** TODAS las raíces tienen módulo < 1. El filtro IIR es **ESTABLE**.")
+                st.success("🎉 **CONCLUSIÓN DEL SISTEMA:** Todos los polos están dentro del círculo unitario. El sistema es **ESTABLE**.")
             else:
-                st.error("⚠️ **CONCLUSIÓN:** Al menos una raíz tiene módulo ≥ 1. El filtro IIR es **INESTABLE**.")
+                st.error("⚠️ **CONCLUSIÓN DEL SISTEMA:** Al menos un polo está fuera o en el borde del círculo unitario. El sistema es **INESTABLE**.")
             
-            st.markdown("### 🌍 Mapa de Raíces en el Plano Complejo")
+            st.markdown("#### 🌍 Mapa de Polos en el Plano Z")
             fig, ax = plt.subplots(figsize=(6, 6))
             theta = np.linspace(0, 2*np.pi, 100)
             ax.plot(np.cos(theta), np.sin(theta), 'k--', label='Círculo Unitario (|z|=1)')
             ax.fill(np.cos(theta), np.sin(theta), color='green', alpha=0.1)
             
             for i, r in enumerate(raices):
-                ax.plot(r.real, r.imag, 'ro', markersize=8)
-                ax.text(r.real + 0.1, r.imag, f'z{i+1}', fontsize=12, color='red', fontweight='bold')
+                # En teoría de control, los polos se grafican con una 'X'
+                ax.plot(r.real, r.imag, 'rx', markersize=10, markeredgewidth=2) 
+                ax.text(r.real + 0.05, r.imag + 0.05, f'$z_{i+1}$', fontsize=12, color='red', fontweight='bold')
                 
             ax.set_xlabel("Parte Real"); ax.set_ylabel("Parte Imaginaria")
-            ax.set_title("Ubicación de las Raíces"); ax.grid(True, alpha=0.3)
+            ax.set_title("Diagrama de Polos"); ax.grid(True, alpha=0.3)
             ax.set_aspect('equal'); ax.legend()
             st.pyplot(fig)
 
