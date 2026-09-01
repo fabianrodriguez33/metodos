@@ -1,302 +1,386 @@
-
 import streamlit as st
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 import math
+import cmath
 from sympy import symbols, diff, sympify, lambdify
 
-
+# ==========================================
+# CONFIGURACIÓN DE LA PÁGINA
+# ==========================================
 st.set_page_config(
-    page_title="Métodos Numéricos - Raíces de Ecuaciones",
+    page_title="Métodos Numéricos - Raíces",
     page_icon="🧮",
     layout="wide"
 )
 
-st.title("🧮 Raíces de Ecuaciones No Lineales")
-st.markdown("**Sesión 3: Método del Punto Fijo, Newton-Raphson y Secante**")
+st.title("🧮 Métodos Numéricos: Raíces de Ecuaciones y Polinomios")
+st.markdown("**Curso:** Métodos Numéricos | **Docente:** Jorge Luis Manrique Plasencia")
 
-st.sidebar.header("⚙️ Configuración")
-
-metodo = st.sidebar.selectbox(
-    "Selecciona el método:",
-    ["Punto Fijo", "Newton-Raphson", "Secante"],
-    index=0
+# Barra lateral para configuración global
+st.sidebar.header("⚙️ Configuración Global")
+sesion = st.sidebar.selectbox(
+    "Selecciona la Sesión:",
+    ["Sesión 3: Ecuaciones No Lineales", "Sesión 4: Raíces de Polinomios (Müller)"],
+    index=1 # Por defecto mostramos la Sesión 4 que es tu tarea actual
 )
 
-opcion = st.sidebar.radio(
-    "Usar problema:",
-    ["Problemas de la guía", "Función personalizada"]
-)
+st.sidebar.markdown("---")
 
-if opcion == "Problemas de la guía":
-    if metodo == "Punto Fijo":
-        st.sidebar.info("Problema 1: Control de temperatura")
-        funcion_str = "18 + 8*exp(-0.15*x)"
-        titulo_problema = "MÉTODO DE PUNTO FIJO: Control de Temperatura"
-        subtitulo_problema = "Ecuación: T = 18 + 8 * exp(-0.15 * T)"
-        x0_default = 20.0
-        x1_default = None
-    elif metodo == "Newton-Raphson":
-        st.sidebar.info("Problema 2: Sistema de almacenamiento")
-        funcion_str = "x**3 - 7*x - 5"
-        titulo_problema = "MÉTODO DE NEWTON-RAPHSON: Dimensionamiento de Almacenamiento"
-        subtitulo_problema = "Ecuación: f(t) = t^3 - 7t - 5 = 0"
-        x0_default = 3.0
-        x1_default = None
-    else:
-        st.sidebar.info("Problema 3: Rendimiento de servidor")
-        funcion_str = "exp(-x) - x**2 + 0.2"
-        titulo_problema = "MÉTODO DE LA SECANTE: Rendimiento del Servidor"
-        subtitulo_problema = "Ecuación: f(x) = exp(-x) - x^2 + 0.2 = 0"
-        x0_default = 0.0
-        x1_default = 1.0
-else:
-    funcion_str = st.sidebar.text_input(
-        "Ingresa la función f(x):",
-        value="x**3 - 7*x - 5",
-        help="Usa sintaxis de Python. Ejemplo: x**2 - 4, exp(-x) - x, sin(x) - x/2"
-    )
-    titulo_problema = f"MÉTODO: {metodo.upper()}"
-    subtitulo_problema = f"Ecuación: f(x) = {funcion_str} = 0"
-    x0_default = 1.0
-    x1_default = 2.0
+# ==========================================
+# FUNCIONES AUXILIARES (SESIÓN 3)
+# ==========================================
+def evaluar_funcion(func_str, x_val):
+    try:
+        x = symbols('x')
+        expr = sympify(func_str)
+        f = lambdify(x, expr, modules=['numpy', 'math'])
+        return f(x_val)
+    except Exception as e:
+        st.error(f"Error en la función: {e}")
+        return None
 
-st.sidebar.subheader("📊 Parámetros")
-
-if metodo == "Secante":
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        x0 = st.number_input("x₀ (inicial):", value=x0_default, format="%.6f")
-    with col2:
-        x1 = st.number_input("x₁ (segundo):", value=x1_default, format="%.6f")
-else:
-    x0 = st.number_input("Valor inicial x₀:", value=x0_default, format="%.6f")
-    x1 = None
-
-epsilon = st.sidebar.slider("Tolerancia εa (%):", 0.001, 1.0, 0.01, 0.001)
-max_iter = st.sidebar.slider("Máximo de iteraciones:", 10, 100, 50, 5)
-
-
-# ============================================================
-# MÉTODO DEL PUNTO FIJO
-# Columnas: Iteración (i) | T_n | g(T_n) | Error Relativo (%)
-# Convención (igual a la tabla de referencia):
-#   fila i muestra T_n = x_i,  g(T_n) = x_(i+1)
-#   Error de la fila i = error de la transición que produjo x_i
-#   (es decir, compara x_i contra x_(i-1)); la fila 0 no tiene error.
-# ============================================================
 def punto_fijo(func_str, x0, epsilon, max_iter):
     x = symbols('x')
     g_expr = sympify(func_str)
     g = lambdify(x, g_expr, modules=['numpy', 'math'])
     g_prime_expr = diff(g_expr, x)
     g_prime = lambdify(x, g_prime_expr, modules=['numpy', 'math'])
-
-    xs = [x0]
+    
+    iteraciones = []
+    x_n = x0
+    x_n1 = x_n 
+    
     for i in range(max_iter):
-        xs.append(g(xs[-1]))
-        err = abs(xs[-1] - xs[-2]) / abs(xs[-1]) * 100 if xs[-1] != 0 else 0.0
-        if err <= epsilon:
+        try:
+            x_n1 = g(x_n)
+            f_x = x_n - x_n1
+            error = abs(x_n1 - x_n) / abs(x_n1) if x_n1 != 0 else 0
+            
+            iteraciones.append({
+                'Iteración': i, 'x_n': x_n, 'f(x_n)': f_x, 'Error %': error * 100
+            })
+            if error <= epsilon: break
+            x_n = x_n1
+        except Exception as e:
+            st.error(f"Error en iteración {i}: {e}")
             break
+    return pd.DataFrame(iteraciones), x_n1, g_prime(x_n1)
 
-    rows = []
-    for i in range(len(xs) - 1):
-        Tn, gTn = xs[i], xs[i + 1]
-        err = np.nan if i == 0 else abs(xs[i] - xs[i - 1]) / abs(xs[i]) * 100
-        rows.append({'Iteración (i)': i, 'T_n': Tn, 'g(T_n)': gTn, 'Error Relativo (%)': err})
-
-    df = pd.DataFrame(rows)
-    raiz = xs[-1]
-    return df, raiz, g_prime(raiz)
-
-
-# ============================================================
-# MÉTODO DE NEWTON-RAPHSON
-# Columnas: Iteración (i) | t_n | f(t_n) | f'(t_n) | t_(n+1) | Error Relativo (%)
-# Convención: Error de la fila i = error de SU PROPIA transición
-#   t_n(i) -> t_(n+1)(i); la fila 0 no tiene error mostrado.
-# ============================================================
 def newton_raphson(func_str, x0, epsilon, max_iter):
     x = symbols('x')
     f_expr = sympify(func_str)
     f = lambdify(x, f_expr, modules=['numpy', 'math'])
     f_prime_expr = diff(f_expr, x)
     f_prime = lambdify(x, f_prime_expr, modules=['numpy', 'math'])
-
-    xs = [x0]
-    rows = []
+    
+    iteraciones = []
+    x_n = x0
+    x_n1 = x_n
+    
     for i in range(max_iter):
-        tn = xs[-1]
-        ft = f(tn)
-        fpt = f_prime(tn)
-        if abs(fpt) < 1e-12:
-            st.warning(f"⚠️ Derivada muy pequeña en iteración {i}")
+        try:
+            f_x = f(x_n)
+            f_prime_x = f_prime(x_n)
+            if abs(f_prime_x) < 1e-10:
+                st.warning(f"⚠️ Derivada muy pequeña en iteración {i}")
+                break
+            x_n1 = x_n - f_x / f_prime_x
+            error = abs(x_n1 - x_n) / abs(x_n1) if x_n1 != 0 else 0
+            
+            iteraciones.append({
+                'Iteración': i, 'x_n': x_n, 'f(x_n)': f_x, 'Error %': error * 100
+            })
+            if error <= epsilon: break
+            x_n = x_n1
+        except Exception as e:
+            st.error(f"Error en iteración {i}: {e}")
             break
-        tn1 = tn - ft / fpt
-        err = np.nan if i == 0 else abs(tn1 - tn) / abs(tn1) * 100
-        rows.append({'Iteración (i)': i, 't_n': tn, 'f(t_n)': ft,
-                      "f'(t_n)": fpt, 't_(n+1)': tn1, 'Error Relativo (%)': err})
-        xs.append(tn1)
-        err_stop = abs(tn1 - tn) / abs(tn1) * 100 if tn1 != 0 else 0.0
-        if err_stop <= epsilon:
-            break
+    return pd.DataFrame(iteraciones), x_n1, str(f_prime_expr)
 
-    df = pd.DataFrame(rows)
-    raiz = xs[-1]
-    return df, raiz, str(f_prime_expr)
-
-
-# ============================================================
-# MÉTODO DE LA SECANTE
-# Columnas: Iteración (i) | x_(n-1) | x_n | f(x_(n-1)) | f(x_n) | x_(n+1) | Error Relativo (%)
-# Convención: Error de la fila i = error de SU PROPIA transición
-#   x_n(i) -> x_(n+1)(i). La numeración empieza en i = 1.
-# ============================================================
 def secante(func_str, x0, x1, epsilon, max_iter):
     x = symbols('x')
     f_expr = sympify(func_str)
     f = lambdify(x, f_expr, modules=['numpy', 'math'])
-
-    xs = [x0, x1]
-    rows = []
-    for i in range(1, max_iter + 1):
-        xn_1, xn = xs[-2], xs[-1]
-        fxn_1, fxn = f(xn_1), f(xn)
-        denom = fxn - fxn_1
-        if abs(denom) < 1e-12:
-            st.warning(f"⚠️ Denominador muy pequeño en iteración {i}")
+    
+    iteraciones = []
+    x_n_1 = x0
+    x_n = x1
+    x_n1 = x_n
+    
+    for i in range(max_iter):
+        try:
+            f_x_n_1 = f(x_n_1)
+            f_x_n = f(x_n)
+            denominador = f_x_n - f_x_n_1
+            if abs(denominador) < 1e-10:
+                st.warning(f"⚠️ Denominador muy pequeño en iteración {i}")
+                break
+            x_n1 = x_n - f_x_n * (x_n - x_n_1) / denominador
+            error = abs(x_n1 - x_n) / abs(x_n1) if x_n1 != 0 else 0
+            
+            iteraciones.append({
+                'Iteración': i, 'x_n': x_n, 'f(x_n)': f_x_n, 'Error %': error * 100
+            })
+            if error <= epsilon: break
+            x_n_1 = x_n
+            x_n = x_n1
+        except Exception as e:
+            st.error(f"Error en iteración {i}: {e}")
             break
-        xn1 = xn - fxn * (xn - xn_1) / denom
-        err = abs(xn1 - xn) / abs(xn1) * 100 if xn1 != 0 else 0.0
-        rows.append({'Iteración (i)': i, 'x_(n-1)': xn_1, 'x_n': xn,
-                      'f(x_(n-1))': fxn_1, 'f(x_n)': fxn, 'x_(n+1)': xn1,
-                      'Error Relativo (%)': err})
-        xs.append(xn1)
-        if err <= epsilon:
-            break
+    return pd.DataFrame(iteraciones), x_n1
 
-    df = pd.DataFrame(rows)
-    raiz = xs[-1]
-    return df, raiz
+# ==========================================
+# FUNCIONES AUXILIARES (SESIÓN 4 - MÜLLER)
+# ==========================================
+def evaluar_polinomio(coeffs, z):
+    resultado = coeffs[0]
+    for i in range(1, len(coeffs)):
+        resultado = resultado * z + coeffs[i]
+    return resultado
 
+def muller(coeffs, z0, z1, z2, tol, max_iter):
+    historial = []
+    z3 = z2
+    for i in range(max_iter):
+        f0 = evaluar_polinomio(coeffs, z0)
+        f1 = evaluar_polinomio(coeffs, z1)
+        f2 = evaluar_polinomio(coeffs, z2)
+        
+        h0 = z1 - z0
+        h1 = z2 - z1
+        delta0 = (f1 - f0) / h0
+        delta1 = (f2 - f1) / h1
+        
+        a = (delta1 - delta0) / (h1 + h0)
+        b = a * h1 + delta1
+        c = f2
+        
+        discriminante = cmath.sqrt(b**2 - 4*a*c)
+        denom1 = b + discriminante
+        denom2 = b - discriminante
+        denom = denom1 if abs(denom1) > abs(denom2) else denom2
+        
+        if abs(denom) < 1e-15: break
+            
+        z3 = z2 - (2 * c) / denom
+        error = abs(z3 - z2)
+        
+        z3_str = f"{z3.real:.6f} {'+' if z3.imag >= 0 else '-'} {abs(z3.imag):.6f}j" if isinstance(z3, complex) else f"{z3:.6f}"
+        historial.append({'Iteración': i + 1, 'z₃ (Aproximación)': z3_str, 'Error Relativo': f"{error:.2e}"})
+        
+        if error < tol or abs(evaluar_polinomio(coeffs, z3)) < tol:
+            return z3, pd.DataFrame(historial), True
+        
+        z0, z1, z2 = z1, z2, z3
+    return z3, pd.DataFrame(historial), False
 
-st.markdown("---")
+def deflacion(coeffs, raiz):
+    nuevos = [coeffs[0]]
+    for i in range(1, len(coeffs) - 1):
+        nuevos.append(coeffs[i] + raiz * nuevos[-1])
+    return nuevos
 
-if st.sidebar.button("🚀 Calcular", type="primary", use_container_width=True):
+def fmt(c):
+    if isinstance(c, complex) and abs(c.imag) > 1e-6:
+        return f"{c.real:.4f} {'+' if c.imag >= 0 else '-'} {abs(c.imag):.4f}j"
+    return f"{c.real:.4f}" if isinstance(c, complex) else f"{c:.4f}"
 
-    st.markdown(f"## {titulo_problema}")
-    st.markdown(f"*{subtitulo_problema} | Tolerancia: < {epsilon:.2f}%*")
+# ==========================================
+# LÓGICA DE LA INTERFAZ
+# ==========================================
 
-    if metodo == "Punto Fijo":
-        df, raiz, g_prime_val = punto_fijo(funcion_str, x0, epsilon, max_iter)
-        col_cfg = {
-            "Iteración (i)": st.column_config.NumberColumn(format="%d"),
-            "T_n": st.column_config.NumberColumn(format="%.6f"),
-            "g(T_n)": st.column_config.NumberColumn(format="%.6f"),
-            "Error Relativo (%)": st.column_config.NumberColumn(format="%.6f"),
-        }
-        raiz_label = raiz
-    elif metodo == "Newton-Raphson":
-        df, raiz, derivada = newton_raphson(funcion_str, x0, epsilon, max_iter)
-        col_cfg = {
-            "Iteración (i)": st.column_config.NumberColumn(format="%d"),
-            "t_n": st.column_config.NumberColumn(format="%.6f"),
-            "f(t_n)": st.column_config.NumberColumn(format="%.6f"),
-            "f'(t_n)": st.column_config.NumberColumn(format="%.6f"),
-            "t_(n+1)": st.column_config.NumberColumn(format="%.6f"),
-            "Error Relativo (%)": st.column_config.NumberColumn(format="%.6f"),
-        }
-        raiz_label = raiz
-    else:
-        df, raiz = secante(funcion_str, x0, x1, epsilon, max_iter)
-        col_cfg = {
-            "Iteración (i)": st.column_config.NumberColumn(format="%d"),
-            "x_(n-1)": st.column_config.NumberColumn(format="%.6f"),
-            "x_n": st.column_config.NumberColumn(format="%.6f"),
-            "f(x_(n-1))": st.column_config.NumberColumn(format="%.6f"),
-            "f(x_n)": st.column_config.NumberColumn(format="%.6f"),
-            "x_(n+1)": st.column_config.NumberColumn(format="%.6f"),
-            "Error Relativo (%)": st.column_config.NumberColumn(format="%.6f"),
-        }
-        raiz_label = raiz
-
-    st.dataframe(df, use_container_width=True, column_config=col_cfg, hide_index=True)
-
-    st.success(f"✅ **Raíz encontrada:** {raiz_label:.6f}")
-    if metodo == "Punto Fijo":
-        st.info(f"📐 **g(x)** = {funcion_str}  |  **|g'(raíz)|** = {abs(g_prime_val):.6f}"
-                f"  {'✅ converge' if abs(g_prime_val) < 1 else '❌ no converge'}")
-    elif metodo == "Newton-Raphson":
-        st.info(f"📐 **f'(x)** = {derivada}")
-
-    # Gráficas interactivas (Plotly, no imágenes estáticas)
-    st.markdown("### 📊 Gráfica de Convergencia")
-    col1, col2 = st.columns(2)
-
-    err_col = 'Error Relativo (%)'
-    x_col = {'Punto Fijo': 'T_n', 'Newton-Raphson': 't_n', 'Secante': 'x_n'}[metodo]
-
-    with col1:
-        df_err = df.dropna(subset=[err_col])
-        fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(
-            x=df_err['Iteración (i)'], y=df_err[err_col],
-            mode='lines+markers', marker=dict(size=9, color='royalblue'),
-            line=dict(width=2),
-            hovertemplate='Iteración %{x}<br>Error = %{y:.6f} %<extra></extra>'
-        ))
-        fig1.add_hline(y=epsilon, line_dash="dash", line_color="red",
-                        annotation_text=f"Tolerancia ({epsilon:.6f}%)")
-        fig1.update_yaxes(type="log", title="Error Relativo (%) [log]")
-        fig1.update_xaxes(title="Iteración", dtick=1)
-        fig1.update_layout(title="Error vs Iteración", height=430)
-        st.plotly_chart(fig1, use_container_width=True)
-
-    with col2:
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(
-            x=df['Iteración (i)'], y=df[x_col],
-            mode='lines+markers', marker=dict(size=9, color='seagreen'),
-            line=dict(width=2),
-            hovertemplate='Iteración %{x}<br>Valor = %{y:.6f}<extra></extra>'
-        ))
-        fig2.add_hline(y=raiz, line_dash="dash", line_color="orange",
-                        annotation_text=f"Raíz ≈ {raiz:.6f}")
-        fig2.update_xaxes(title="Iteración", dtick=1)
-        fig2.update_yaxes(title="Valor")
-        fig2.update_layout(title="Convergencia del valor", height=430)
-        st.plotly_chart(fig2, use_container_width=True)
-
-    st.markdown("### 🔍 Análisis de Resultados")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Iteraciones", len(df))
-    with col2:
-        st.metric("Error Final", f"{df[err_col].iloc[-1]:.6f}%")
-    with col3:
-        st.metric("Raíz Aproximada", f"{raiz:.6f}")
-
+if sesion == "Sesión 3: Ecuaciones No Lineales":
+    st.markdown("---")
+    st.subheader("📌 Sesión 3: Método del Punto Fijo, Newton-Raphson y Secante")
+    
+    metodo = st.sidebar.selectbox("Selecciona el método:", ["Punto Fijo", "Newton-Raphson", "Secante"], index=0)
+    opcion = st.sidebar.radio("Usar problema:", ["Problemas de la guía", "Función personalizada"])
+    
     if opcion == "Problemas de la guía":
-        st.markdown("#### 📝 Interpretación Física")
         if metodo == "Punto Fijo":
-            st.info(f"La temperatura de equilibrio del centro de datos es **{raiz:.6f}°C**, "
-                    f"dentro del rango óptimo para servidores (18-27°C).")
+            st.sidebar.info("Problema 1: Control de temperatura")
+            funcion_str, x0_default, x1_default = "18 + 8*exp(-0.15*x)", 20.0, None
         elif metodo == "Newton-Raphson":
-            st.info(f"El tiempo de respuesta del sistema de almacenamiento es **{raiz:.6f} ms**.")
+            st.sidebar.info("Problema 2: Sistema de almacenamiento")
+            funcion_str, x0_default, x1_default = "x**3 - 7*x - 5", 3.0, None
         else:
-            st.info(f"El nivel de carga normalizado del servidor es **{raiz:.6f}**.")
+            st.sidebar.info("Problema 3: Rendimiento de servidor")
+            funcion_str, x0_default, x1_default = "exp(-x) - x**2 + 0.2", 0.0, 1.0
+    else:
+        funcion_str = st.sidebar.text_input("Ingresa la función f(x):", value="x**3 - 7*x - 5")
+        x0_default, x1_default = 1.0, 2.0
+
+    st.sidebar.subheader("📊 Parámetros")
+    if metodo == "Secante":
+        col1, col2 = st.sidebar.columns(2)
+        with col1: x0 = st.number_input("x₀ (inicial):", value=x0_default, format="%.4f")
+        with col2: x1 = st.number_input("x₁ (segundo):", value=x1_default, format="%.4f")
+    else:
+        x0 = st.sidebar.number_input("Valor inicial x₀:", value=x0_default, format="%.4f")
+        x1 = None
+
+    epsilon = st.sidebar.slider("Tolerancia εa (%):", 0.001, 1.0, 0.01, 0.001) / 100
+    max_iter = st.sidebar.slider("Máximo de iteraciones:", 10, 100, 50, 5)
+
+    if st.sidebar.button("🚀 Calcular", type="primary", use_container_width=True):
+        st.subheader(f"📈 Resultados - Método: {metodo}")
+        
+        if metodo == "Punto Fijo":
+            df, raiz, g_prime_val = punto_fijo(funcion_str, x0, epsilon, max_iter)
+            st.success(f"✅ **Raíz encontrada:** {raiz:.6f}")
+            st.info(f"📐 **Función de iteración:** g(x) = {funcion_str}")
+            st.info(f"📐 **Derivada g'(x) en la raíz:** {abs(g_prime_val):.6f}")
+            if abs(g_prime_val) < 1: st.success("✅ **Convergencia garantizada:** |g'(x)| < 1")
+            else: st.error("❌ **No converge:** |g'(x)| ≥ 1")
+        elif metodo == "Newton-Raphson":
+            df, raiz, derivada = newton_raphson(funcion_str, x0, epsilon, max_iter)
+            st.success(f"✅ **Raíz encontrada:** {raiz:.6f}")
+            st.info(f"📐 **Función:** f(x) = {funcion_str}")
+            st.info(f"📐 **Derivada:** f'(x) = {derivada}")
+        else:
+            df, raiz = secante(funcion_str, x0, x1, epsilon, max_iter)
+            st.success(f"✅ **Raíz encontrada:** {raiz:.6f}")
+            st.info(f"📐 **Función:** f(x) = {funcion_str}")
+            
+        st.markdown("### 📋 Tabla de Iteraciones")
+        st.dataframe(df, use_container_width=True)
+        
+        st.markdown("### 📊 Gráfica de Convergencia")
+        col1, col2 = st.columns(2)
+        with col1:
+            fig1, ax1 = plt.subplots(figsize=(10, 6))
+            ax1.plot(df['Iteración'], df['Error %'], 'bo-', linewidth=2, markersize=8)
+            ax1.set_xlabel('Iteración'); ax1.set_ylabel('Error Relativo (%)')
+            ax1.set_title('Error vs Iteración', fontweight='bold'); ax1.grid(True, alpha=0.3)
+            ax1.axhline(y=epsilon*100, color='r', linestyle='--', label=f'Tolerancia ({epsilon*100:.3f}%)')
+            ax1.legend(); st.pyplot(fig1)
+        with col2:
+            fig2, ax2 = plt.subplots(figsize=(10, 6))
+            ax2.plot(df['Iteración'], df['x_n'], 'go-', linewidth=2, markersize=8)
+            ax2.set_xlabel('Iteración'); ax2.set_ylabel('Valor de x')
+            ax2.set_title('Convergencia de x', fontweight='bold'); ax2.grid(True, alpha=0.3)
+            st.pyplot(fig2)
+            
+        st.markdown("### 🔍 Análisis de Resultados")
+        col1, col2, col3 = st.columns(3)
+        with col1: st.metric("Iteraciones", len(df))
+        with col2: st.metric("Error Final", f"{df['Error %'].iloc[-1]:.6f}%")
+        with col3: st.metric("Raíz Aproximada", f"{raiz:.6f}")
+        
+        if opcion == "Problemas de la guía":
+            st.markdown("#### 📝 Interpretación Física")
+            if metodo == "Punto Fijo": st.info(f"La temperatura de equilibrio es **{raiz:.2f}°C**.")
+            elif metodo == "Newton-Raphson": st.info(f"El tiempo de respuesta es **{raiz:.2f} ms**.")
+            else: st.info(f"El nivel de carga normalizado es **{raiz:.2f}**.")
+
+elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
+    st.markdown("---")
+    st.subheader("📌 Sesión 4: Método de Müller y Análisis de Estabilidad de Filtros IIR")
+    
+    opcion = st.sidebar.radio("Usar problema:", ["GAA: Filtro Digital IIR (Estabilidad)", "Polinomio personalizado"])
+    
+    if opcion == "GAA: Filtro Digital IIR (Estabilidad)":
+        st.sidebar.info("Polinomio: $8z^4 - 6z^3 - 3z^2 + 3z - 1 = 0$")
+        coeffs_default = [8, -6, -3, 3, -1]
+        x0_def, x1_def, x2_def = 0.0, 0.5, 1.0
+        tol_def = 1e-5
+        
+        with st.expander("📖 Ayuda Teórica para tu Informe (Descartes y Lagrange)"):
+            st.markdown("""
+            **1. Regla de Descartes:**
+            - $D(z)$ signos: $+8, -6, -3, +3, -1$ → **3 cambios** → 3 o 1 raíces reales positivas.
+            - $D(-z)$ signos: $+8, +6, -3, -3, -1$ → **1 cambio** → Exactamente 1 raíz real negativa.
+            
+            **2. Cota de Lagrange:**
+            - $a_n = 8$, $K = 6$ (mayor valor absoluto negativo), $k = 1$ (distancia al primer negativo).
+            - $B = 1 + \sqrt[1]{6/8} = 1 + 0.75 = \mathbf{1.75}$. Todas las raíces cumplen $|z| \le 1.75$.
+            """)
+    else:
+        st.sidebar.info("Ingresa los coeficientes de mayor a menor grado (ej: 1, 0, -3, 0, 2)")
+        coeffs_input = st.sidebar.text_input("Coeficientes (separados por coma):", "1, 0, -3, 0, 2")
+        try:
+            coeffs_default = [float(c.strip()) for c in coeffs_input.split(",")]
+        except:
+            coeffs_default = [1.0, 0.0, -3.0, 0.0, 2.0]
+        x0_def, x1_def, x2_def = 0.0, 0.5, 1.0
+        tol_def = 1e-5
+
+    st.sidebar.subheader("📊 Parámetros de Müller")
+    col1, col2, col3 = st.sidebar.columns(3)
+    with col1: z0 = st.number_input("z₀:", value=x0_def, format="%.4f")
+    with col2: z1 = st.number_input("z₁:", value=x1_def, format="%.4f")
+    with col3: z2 = st.number_input("z₂:", value=x2_def, format="%.4f")
+    
+    tol = st.sidebar.number_input("Tolerancia (ε):", value=tol_def, format="%.e")
+    max_iter = st.sidebar.slider("Máx. iteraciones por raíz:", 10, 100, 50, 5)
+
+    st.markdown("---")
+    if st.sidebar.button("🚀 Calcular Raíces y Estabilidad", type="primary", use_container_width=True):
+        coeffs_actuales = coeffs_default.copy()
+        grado = len(coeffs_actuales) - 1
+        raices = []
+        
+        st.markdown(f"#### 🔍 Polinomio de grado {grado}: Coeficientes = `{[fmt(c) for c in coeffs_actuales]}`")
+        
+        for i in range(grado):
+            st.markdown(f"**Paso {i+1}: Buscando Raíz {i+1}**")
+            
+            if len(coeffs_actuales) == 2: 
+                raiz = -coeffs_actuales[1] / coeffs_actuales[0]
+                raices.append(raiz)
+                st.success(f"✅ Raíz directa (lineal): {fmt(raiz)}")
+                break
+                
+            raiz, df_iter, convergio = muller(coeffs_actuales, z0, z1, z2, tol, max_iter)
+            
+            if convergio:
+                st.success(f"✅ Convergió en {len(df_iter)} iteraciones. Raíz: **{fmt(raiz)}**")
+                raices.append(raiz)
+                
+                with st.expander("📋 Ver tabla de convergencia"):
+                    st.dataframe(df_iter, use_container_width=True)
+                
+                coeffs_actuales = deflacion(coeffs_actuales, raiz)
+                st.info(f"➡️ Polinomio deflacionado (grado {len(coeffs_actuales)-1}): `{[fmt(c) for c in coeffs_actuales]}`")
+            else:
+                st.error("❌ No convergió.")
+                break
+
+        if len(raices) == grado:
+            st.markdown("---")
+            st.subheader("📊 Análisis de Estabilidad del Filtro IIR")
+            st.markdown("Condición: El módulo de todas las raíces debe cumplir **$|z| < 1$** (dentro del círculo unitario).")
+            
+            datos, estable = [], True
+            for i, r in enumerate(raices):
+                mod = abs(r)
+                if mod >= 1.0: estable = False
+                r_str = f"{r.real:.4f} {'+' if r.imag >= 0 else '-'} {abs(r.imag):.4f}j" if isinstance(r, complex) else f"{r:.4f}"
+                datos.append({"Raíz": f"z{i+1}", "Valor": r_str, "Módulo |z|": f"{mod:.4f}", "¿Estable?": "✅ SÍ" if mod < 1.0 else "❌ NO"})
+                
+            st.dataframe(pd.DataFrame(datos), use_container_width=True)
+            
+            if estable:
+                st.success("🎉 **CONCLUSIÓN:** TODAS las raíces tienen módulo < 1. El filtro IIR es **ESTABLE**.")
+            else:
+                st.error("⚠️ **CONCLUSIÓN:** Al menos una raíz tiene módulo ≥ 1. El filtro IIR es **INESTABLE**.")
+            
+            st.markdown("### 🌍 Mapa de Raíces en el Plano Complejo")
+            fig, ax = plt.subplots(figsize=(6, 6))
+            theta = np.linspace(0, 2*np.pi, 100)
+            ax.plot(np.cos(theta), np.sin(theta), 'k--', label='Círculo Unitario (|z|=1)')
+            ax.fill(np.cos(theta), np.sin(theta), color='green', alpha=0.1)
+            
+            for i, r in enumerate(raices):
+                ax.plot(r.real, r.imag, 'ro', markersize=8)
+                ax.text(r.real + 0.1, r.imag, f'z{i+1}', fontsize=12, color='red', fontweight='bold')
+                
+            ax.set_xlabel("Parte Real"); ax.set_ylabel("Parte Imaginaria")
+            ax.set_title("Ubicación de las Raíces"); ax.grid(True, alpha=0.3)
+            ax.set_aspect('equal'); ax.legend()
+            st.pyplot(fig)
 
 st.markdown("---")
-st.markdown("""
-### ℹ️ Información de los Métodos
-
-| Método | Orden de Convergencia | Requiere Derivada | Velocidad |
-|--------|----------------------|-------------------|-----------|
-| Punto Fijo | Lineal (1) | No | Lenta |
-| Newton-Raphson | Cuadrática (2) | Sí | Muy rápida |
-| Secante | Superlineal (1.618) | No | Rápida |
-""")
-
-st.markdown("---")
-st.markdown("**Curso:** Métodos Numéricos | **Sesión 3** | Docente: Jorge Luis Manrique Plasencia")
+st.markdown("**Curso:** Métodos Numéricos | Docente: Jorge Luis Manrique Plasencia")
