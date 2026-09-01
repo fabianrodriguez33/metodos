@@ -18,12 +18,11 @@ st.set_page_config(
 st.title("🧮 Métodos Numéricos: Raíces de Ecuaciones y Polinomios")
 st.markdown("**Curso:** Métodos Numéricos | **Docente:** Jorge Luis Manrique Plasencia")
 
-# Barra lateral para configuración global
 st.sidebar.header("⚙️ Configuración Global")
 sesion = st.sidebar.selectbox(
     "Selecciona la Sesión:",
     ["Sesión 3: Ecuaciones No Lineales", "Sesión 4: Raíces de Polinomios (Müller)"],
-    index=1 
+    index=1
 )
 
 st.sidebar.markdown("---")
@@ -57,10 +56,7 @@ def punto_fijo(func_str, x0, epsilon, max_iter):
             x_n1 = g(x_n)
             f_x = x_n - x_n1
             error = abs(x_n1 - x_n) / abs(x_n1) if x_n1 != 0 else 0
-            
-            iteraciones.append({
-                'Iteración': i, 'x_n': x_n, 'f(x_n)': f_x, 'Error %': error * 100
-            })
+            iteraciones.append({'Iteración': i, 'x_n': x_n, 'f(x_n)': f_x, 'Error %': error * 100})
             if error <= epsilon: break
             x_n = x_n1
         except Exception as e:
@@ -88,10 +84,7 @@ def newton_raphson(func_str, x0, epsilon, max_iter):
                 break
             x_n1 = x_n - f_x / f_prime_x
             error = abs(x_n1 - x_n) / abs(x_n1) if x_n1 != 0 else 0
-            
-            iteraciones.append({
-                'Iteración': i, 'x_n': x_n, 'f(x_n)': f_x, 'Error %': error * 100
-            })
+            iteraciones.append({'Iteración': i, 'x_n': x_n, 'f(x_n)': f_x, 'Error %': error * 100})
             if error <= epsilon: break
             x_n = x_n1
         except Exception as e:
@@ -119,10 +112,7 @@ def secante(func_str, x0, x1, epsilon, max_iter):
                 break
             x_n1 = x_n - f_x_n * (x_n - x_n_1) / denominador
             error = abs(x_n1 - x_n) / abs(x_n1) if x_n1 != 0 else 0
-            
-            iteraciones.append({
-                'Iteración': i, 'x_n': x_n, 'f(x_n)': f_x_n, 'Error %': error * 100
-            })
+            iteraciones.append({'Iteración': i, 'x_n': x_n, 'f(x_n)': f_x_n, 'Error %': error * 100})
             if error <= epsilon: break
             x_n_1 = x_n
             x_n = x_n1
@@ -141,19 +131,23 @@ def evaluar_polinomio(coeffs, z):
     return resultado
 
 def fmt_tabla(val):
-    """Formatea números reales o complejos limpiamente para la tabla"""
+    """Formatea reales o complejos para la tabla"""
     if isinstance(val, complex) and abs(val.imag) > 1e-6:
         return f"{val.real:.5f} {'+' if val.imag >= 0 else '-'} {abs(val.imag):.5f}j"
     return f"{val.real:.5f}" if isinstance(val, complex) else f"{val:.5f}"
+
+def fmt_error(e):
+    """Imita el formato 'General' de Excel del docente: 22.2131 / 2.1E-05"""
+    if e < 1e-3:
+        return f"{e:.1E}"
+    return f"{e:.6g}"
 
 def muller(coeffs, z0, z1, z2, tol, max_iter):
     historial = []
     z3 = z2
     for i in range(max_iter):
-        # Guardamos los valores ANTES de calcular z3 para la tabla del profesor
-        x_i = z0
-        x_i1 = z1
-        x_i2 = z2
+        # La ventana ACTUAL de esta iteración (para la tabla del profe)
+        x_i, x_i1, x_i2 = z0, z1, z2
         
         f0 = evaluar_polinomio(coeffs, z0)
         f1 = evaluar_polinomio(coeffs, z1)
@@ -171,28 +165,30 @@ def muller(coeffs, z0, z1, z2, tol, max_iter):
         discriminante = cmath.sqrt(b**2 - 4*a*c)
         denom1 = b + discriminante
         denom2 = b - discriminante
+        # Criterio de la Guía Teórica: maximizar |denominador| (evita cancelación sustractiva)
         denom = denom1 if abs(denom1) > abs(denom2) else denom2
         
         if abs(denom) < 1e-15: break
             
         z3 = z2 - (2 * c) / denom
-        error = abs(z3 - z2)
         
-        # Tabla exacta que pide el profesor: i | xi | xi+1 | xi+2 | xi+3 | Error
+        # Error relativo aproximado (%) igual que el Excel del docente.
+        # La fila i=0 queda en blanco porque aún no hay x3 previo.
+        ea = abs((z3 - x_i2) / z3) * 100 if (i > 0 and abs(z3) > 1e-15) else None
+        
         historial.append({
-            'i': i + 1, 
-            'x_i': fmt_tabla(x_i), 
-            'x_{i+1}': fmt_tabla(x_i1), 
-            'x_{i+2}': fmt_tabla(x_i2), 
-            'x_{i+3}': fmt_tabla(z3), 
-            'Error |x_{i+3} - x_{i+2}|': f"{error:.2e}"
+            'i': i,                      # <-- ahora empieza en 0, como en clase
+            'xi': fmt_tabla(x_i),
+            'xi+1': fmt_tabla(x_i1),
+            'xi+2': fmt_tabla(x_i2),
+            'xi+3': fmt_tabla(z3),
+            'Error': '' if ea is None else fmt_error(ea)
         })
         
-        if error < tol or abs(evaluar_polinomio(coeffs, z3)) < tol:
+        if ea is not None and ea < tol:
             return z3, pd.DataFrame(historial), True
         
-        # Desplazar ventana
-        z0, z1, z2 = z1, z2, z3
+        z0, z1, z2 = z1, z2, z3  # desplazar ventana
         
     return z3, pd.DataFrame(historial), False
 
@@ -207,20 +203,15 @@ def fmt(c):
         return f"{c.real:.4f} {'+' if c.imag >= 0 else '-'} {abs(c.imag):.4f}j"
     return f"{c.real:.4f}" if isinstance(c, complex) else f"{c:.4f}"
 
-# --- FUNCIONES DE ANÁLISIS TEÓRICO DINÁMICO ---
 def calcular_descartes(coeffs):
     signos = [np.sign(c) for c in coeffs if c != 0]
     cambios_pos = sum(1 for i in range(len(signos)-1) if signos[i] != signos[i+1])
-    
     n = len(coeffs) - 1
     signos_neg = []
     for i, c in enumerate(coeffs):
         if c == 0: continue
         potencia = n - i
-        if potencia % 2 != 0:
-            signos_neg.append(-np.sign(c))
-        else:
-            signos_neg.append(np.sign(c))
+        signos_neg.append(-np.sign(c) if potencia % 2 != 0 else np.sign(c))
     cambios_neg = sum(1 for i in range(len(signos_neg)-1) if signos_neg[i] != signos_neg[i+1])
     return cambios_pos, cambios_neg
 
@@ -228,7 +219,7 @@ def calcular_lagrange(coeffs):
     if coeffs[0] < 0: coeffs = [-c for c in coeffs]
     a_n = coeffs[0]
     neg_coeffs = [abs(c) for c in coeffs if c < 0]
-    if not neg_coeffs: return 0.0 
+    if not neg_coeffs: return 0.0
     K = max(neg_coeffs)
     k = 0
     for i in range(1, len(coeffs)):
@@ -364,9 +355,9 @@ elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
 
     st.sidebar.subheader("📊 Parámetros de Müller")
     col1, col2, col3 = st.sidebar.columns(3)
-    with col1: z0 = st.number_input("z₀ (x_i):", value=z0_def, format="%.4f")
-    with col2: z1 = st.number_input("z₁ (x_{i+1}):", value=z1_def, format="%.4f")
-    with col3: z2 = st.number_input("z₂ (x_{i+2}):", value=z2_def, format="%.4f")
+    with col1: z0 = st.number_input("z₀ (xi):", value=z0_def, format="%.4f")
+    with col2: z1 = st.number_input("z₁ (xi+1):", value=z1_def, format="%.4f")
+    with col3: z2 = st.number_input("z₂ (xi+2):", value=z2_def, format="%.4f")
     
     tol = st.sidebar.number_input("Tolerancia (ε):", value=tol_def, format="%.e")
     max_iter = st.sidebar.slider("Máx. iteraciones por raíz:", 10, 100, 50, 5)
@@ -412,11 +403,10 @@ elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
                 raiz, df_iter, convergio = muller(coeffs_actuales, z0, z1, z2, tol, max_iter)
                 
                 if convergio:
-                    st.success(f"✅ Convergió en {len(df_iter)} iteraciones. Raíz encontrada: **{fmt(raiz)}**")
+                    st.success(f"✅ Convergió en {len(df_iter)} iteraciones (i = 0 a {len(df_iter)-1}). Raíz encontrada: **{fmt(raiz)}**")
                     raices.append(raiz)
                     
-                    st.markdown("**📋 Tabla de Convergencia (Ventana de Müller)**")
-                    # Esta es la tabla EXACTA que pide tu profesor
+                    st.markdown("**📋 Tabla de Convergencia (formato de clase: i | xi | xi+1 | xi+2 | xi+3 | Error)**")
                     st.dataframe(df_iter, use_container_width=True, hide_index=True)
                     
                     coeffs_actuales = deflacion(coeffs_actuales, raiz)
@@ -453,7 +443,7 @@ elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
             ax.fill(np.cos(theta), np.sin(theta), color='green', alpha=0.1)
             
             for i, r in enumerate(raices):
-                ax.plot(r.real, r.imag, 'rx', markersize=10, markeredgewidth=2) 
+                ax.plot(r.real, r.imag, 'rx', markersize=10, markeredgewidth=2)
                 ax.text(r.real + 0.05, r.imag + 0.05, f'$z_{i+1}$', fontsize=12, color='red', fontweight='bold')
                 
             ax.set_xlabel("Parte Real"); ax.set_ylabel("Parte Imaginaria")
