@@ -21,11 +21,89 @@ st.markdown("**Curso:** Métodos Numéricos | **Docente:** Jorge Luis Manrique P
 st.sidebar.header("⚙️ Configuración Global")
 sesion = st.sidebar.selectbox(
     "Selecciona la Sesión:",
-    ["Sesión 3: Ecuaciones No Lineales", "Sesión 4: Raíces de Polinomios (Müller)"],
-    index=1
+    [
+        "Sesión 2: Bisección y Falsa Posición",
+        "Sesión 3: Ecuaciones No Lineales",
+        "Sesión 4: Raíces de Polinomios (Müller)"
+    ],
+    index=0
 )
 
 st.sidebar.markdown("---")
+
+# ==========================================
+# FUNCIONES AUXILIARES (SESIÓN 2 - BISECCIÓN Y FALSA POSICIÓN)
+# ==========================================
+def crear_f(func_str):
+    x = symbols('x')
+    expr = sympify(func_str)
+    return lambdify(x, expr, modules=['numpy', 'math'])
+
+def biseccion(func_str, a, b, epsilon, max_iter):
+    f = crear_f(func_str)
+    iteraciones = []
+    xr_ant = None
+    fa, fb = f(a), f(b)
+
+    if fa * fb > 0:
+        st.error("❌ No hay cambio de signo en el intervalo [a, b]. f(a)·f(b) > 0. Elige otro intervalo.")
+        return pd.DataFrame(), None
+
+    for i in range(max_iter):
+        xr = (a + b) / 2
+        fxr = f(xr)
+        error = abs((xr - xr_ant) / xr) * 100 if xr_ant is not None and xr != 0 else None
+        iteraciones.append({
+            'Iteración': i, 'a': a, 'b': b, 'xr': xr, 'f(xr)': fxr,
+            'Error %': error if error is not None else np.nan
+        })
+
+        if fxr == 0 or (error is not None and error <= epsilon * 100):
+            break
+
+        if fa * fxr < 0:
+            b = xr
+            fb = fxr
+        else:
+            a = xr
+            fa = fxr
+
+        xr_ant = xr
+
+    return pd.DataFrame(iteraciones), xr
+
+def falsa_posicion(func_str, a, b, epsilon, max_iter):
+    f = crear_f(func_str)
+    iteraciones = []
+    xr_ant = None
+    fa, fb = f(a), f(b)
+
+    if fa * fb > 0:
+        st.error("❌ No hay cambio de signo en el intervalo [a, b]. f(a)·f(b) > 0. Elige otro intervalo.")
+        return pd.DataFrame(), None
+
+    for i in range(max_iter):
+        xr = b - fb * (a - b) / (fa - fb)
+        fxr = f(xr)
+        error = abs((xr - xr_ant) / xr) * 100 if xr_ant is not None and xr != 0 else None
+        iteraciones.append({
+            'Iteración': i, 'a': a, 'b': b, 'xr': xr, 'f(xr)': fxr,
+            'Error %': error if error is not None else np.nan
+        })
+
+        if fxr == 0 or (error is not None and error <= epsilon * 100):
+            break
+
+        if fa * fxr < 0:
+            b = xr
+            fb = fxr
+        else:
+            a = xr
+            fa = fxr
+
+        xr_ant = xr
+
+    return pd.DataFrame(iteraciones), xr
 
 # ==========================================
 # FUNCIONES AUXILIARES (SESIÓN 3)
@@ -46,11 +124,11 @@ def punto_fijo(func_str, x0, epsilon, max_iter):
     g = lambdify(x, g_expr, modules=['numpy', 'math'])
     g_prime_expr = diff(g_expr, x)
     g_prime = lambdify(x, g_prime_expr, modules=['numpy', 'math'])
-    
+
     iteraciones = []
     x_n = x0
-    x_n1 = x_n 
-    
+    x_n1 = x_n
+
     for i in range(max_iter):
         try:
             x_n1 = g(x_n)
@@ -70,11 +148,11 @@ def newton_raphson(func_str, x0, epsilon, max_iter):
     f = lambdify(x, f_expr, modules=['numpy', 'math'])
     f_prime_expr = diff(f_expr, x)
     f_prime = lambdify(x, f_prime_expr, modules=['numpy', 'math'])
-    
+
     iteraciones = []
     x_n = x0
     x_n1 = x_n
-    
+
     for i in range(max_iter):
         try:
             f_x = f(x_n)
@@ -96,12 +174,12 @@ def secante(func_str, x0, x1, epsilon, max_iter):
     x = symbols('x')
     f_expr = sympify(func_str)
     f = lambdify(x, f_expr, modules=['numpy', 'math'])
-    
+
     iteraciones = []
     x_n_1 = x0
     x_n = x1
     x_n1 = x_n
-    
+
     for i in range(max_iter):
         try:
             f_x_n_1 = f(x_n_1)
@@ -131,13 +209,11 @@ def evaluar_polinomio(coeffs, z):
     return resultado
 
 def fmt_tabla(val):
-    """Formatea reales o complejos para la tabla"""
     if isinstance(val, complex) and abs(val.imag) > 1e-6:
         return f"{val.real:.5f} {'+' if val.imag >= 0 else '-'} {abs(val.imag):.5f}j"
     return f"{val.real:.5f}" if isinstance(val, complex) else f"{val:.5f}"
 
 def fmt_error(e):
-    """Imita el formato 'General' de Excel del docente: 22.2131 / 2.1E-05"""
     if e < 1e-3:
         return f"{e:.1E}"
     return f"{e:.6g}"
@@ -146,50 +222,46 @@ def muller(coeffs, z0, z1, z2, tol, max_iter):
     historial = []
     z3 = z2
     for i in range(max_iter):
-        # La ventana ACTUAL de esta iteración (para la tabla del profe)
         x_i, x_i1, x_i2 = z0, z1, z2
-        
+
         f0 = evaluar_polinomio(coeffs, z0)
         f1 = evaluar_polinomio(coeffs, z1)
         f2 = evaluar_polinomio(coeffs, z2)
-        
+
         h0 = z1 - z0
         h1 = z2 - z1
         delta0 = (f1 - f0) / h0
         delta1 = (f2 - f1) / h1
-        
+
         a = (delta1 - delta0) / (h1 + h0)
         b = a * h1 + delta1
         c = f2
-        
+
         discriminante = cmath.sqrt(b**2 - 4*a*c)
         denom1 = b + discriminante
         denom2 = b - discriminante
-        # Criterio de la Guía Teórica: maximizar |denominador| (evita cancelación sustractiva)
         denom = denom1 if abs(denom1) > abs(denom2) else denom2
-        
+
         if abs(denom) < 1e-15: break
-            
+
         z3 = z2 - (2 * c) / denom
-        
-        # Error relativo aproximado (%) igual que el Excel del docente.
-        # La fila i=0 queda en blanco porque aún no hay x3 previo.
+
         ea = abs((z3 - x_i2) / z3) * 100 if (i > 0 and abs(z3) > 1e-15) else None
-        
+
         historial.append({
-            'i': i,                      # <-- ahora empieza en 0, como en clase
+            'i': i,
             'xi': fmt_tabla(x_i),
             'xi+1': fmt_tabla(x_i1),
             'xi+2': fmt_tabla(x_i2),
             'xi+3': fmt_tabla(z3),
             'Error': '' if ea is None else fmt_error(ea)
         })
-        
+
         if ea is not None and ea < tol:
             return z3, pd.DataFrame(historial), True
-        
-        z0, z1, z2 = z1, z2, z3  # desplazar ventana
-        
+
+        z0, z1, z2 = z1, z2, z3
+
     return z3, pd.DataFrame(historial), False
 
 def deflacion(coeffs, raiz):
@@ -246,13 +318,105 @@ def formatear_polinomio_latex(coeffs):
 # LÓGICA DE LA INTERFAZ
 # ==========================================
 
-if sesion == "Sesión 3: Ecuaciones No Lineales":
+if sesion == "Sesión 2: Bisección y Falsa Posición":
+    st.markdown("---")
+    st.subheader("📌 Sesión 2: Método de Bisección y Falsa Posición (Regula Falsi)")
+    st.markdown(
+        "Métodos **cerrados**: requieren un intervalo $[a, b]$ donde $f(a) \\cdot f(b) < 0$ "
+        "(cambio de signo, teorema de Bolzano). Siempre convergen si el intervalo inicial es válido."
+    )
+
+    metodo = st.sidebar.selectbox("Selecciona el método:", ["Bisección", "Falsa Posición"], index=0)
+    opcion = st.sidebar.radio("Usar problema:", ["Problemas de la guía", "Función personalizada"])
+
+    contexto = None
+    if opcion == "Problemas de la guía":
+        if metodo == "Bisección":
+            st.sidebar.info("Problema 1: Dimensionamiento de un enlace de red")
+            funcion_str = "1/(x-8.5) - 0.35*log(x-2)"
+            a_default, b_default = 9.5, 10.0
+            contexto = "capacidad"
+        else:
+            st.sidebar.info("Problema 2: Migración de un sistema a la nube")
+            funcion_str = "45 + 12*x - 20*exp(0.4*x)"
+            a_default, b_default = 3.0, 4.0
+            contexto = "migracion"
+    else:
+        funcion_str = st.sidebar.text_input("Ingresa la función f(x):", value="x**3 - x - 2")
+        a_default, b_default = 1.0, 2.0
+
+    st.sidebar.subheader("📊 Parámetros")
+    col1, col2 = st.sidebar.columns(2)
+    with col1: a = st.number_input("a (límite inferior):", value=a_default, format="%.4f")
+    with col2: b = st.number_input("b (límite superior):", value=b_default, format="%.4f")
+
+    epsilon = st.sidebar.slider("Tolerancia εa (%):", 0.001, 1.0, 0.5, 0.001) / 100
+    max_iter = st.sidebar.slider("Máximo de iteraciones:", 5, 100, 50, 5)
+
+    if st.sidebar.button("🚀 Calcular", type="primary", use_container_width=True):
+        st.subheader(f"📈 Resultados - Método: {metodo}")
+        st.info(f"📐 **Función:** f(x) = {funcion_str}")
+
+        if metodo == "Bisección":
+            df, raiz = biseccion(funcion_str, a, b, epsilon, max_iter)
+        else:
+            df, raiz = falsa_posicion(funcion_str, a, b, epsilon, max_iter)
+
+        if raiz is not None and not df.empty:
+            st.success(f"✅ **Raíz encontrada:** {raiz:.6f}")
+
+            st.markdown("### 📋 Tabla de Iteraciones")
+            st.dataframe(df, use_container_width=True)
+
+            st.markdown("### 📊 Gráfica de Convergencia")
+            col1, col2 = st.columns(2)
+            with col1:
+                fig1, ax1 = plt.subplots(figsize=(10, 6))
+                df_err = df.dropna(subset=['Error %'])
+                ax1.plot(df_err['Iteración'], df_err['Error %'], 'bo-', linewidth=2, markersize=8)
+                ax1.set_xlabel('Iteración'); ax1.set_ylabel('Error Relativo (%)')
+                ax1.set_title('Error vs Iteración', fontweight='bold'); ax1.grid(True, alpha=0.3)
+                ax1.axhline(y=epsilon*100, color='r', linestyle='--', label=f'Tolerancia ({epsilon*100:.3f}%)')
+                ax1.legend(); st.pyplot(fig1)
+            with col2:
+                fig2, ax2 = plt.subplots(figsize=(10, 6))
+                ax2.plot(df['Iteración'], df['xr'], 'go-', linewidth=2, markersize=8)
+                ax2.set_xlabel('Iteración'); ax2.set_ylabel('Valor de xr')
+                ax2.set_title('Convergencia de xr', fontweight='bold'); ax2.grid(True, alpha=0.3)
+                st.pyplot(fig2)
+
+            st.markdown("### 🔍 Análisis de Resultados")
+            col1, col2, col3 = st.columns(3)
+            with col1: st.metric("Iteraciones", len(df))
+            with col2:
+                err_final = df['Error %'].dropna().iloc[-1] if df['Error %'].notna().any() else 0.0
+                st.metric("Error Final", f"{err_final:.6f}%")
+            with col3: st.metric("Raíz Aproximada", f"{raiz:.6f}")
+
+            if opcion == "Problemas de la guía":
+                st.markdown("#### 📝 Interpretación de Ingeniería")
+                if contexto == "capacidad":
+                    st.info(
+                        f"La capacidad óptima del enlace es **C ≈ {raiz:.4f} Mbps**. "
+                        "En la práctica conviene redondear este valor hacia arriba, ya que contratar "
+                        "una capacidad menor a la raíz haría que el tiempo de espera crezca sin control "
+                        "(el sistema se acerca a la inestabilidad de la cola M/M/1)."
+                    )
+                elif contexto == "migracion":
+                    st.info(
+                        f"El punto de equilibrio ocurre en **t ≈ {raiz:.4f} años**. Antes de ese tiempo, "
+                        "el costo acumulado en la nube (C₂) es menor o comparable al local, pero después "
+                        "el crecimiento exponencial de C₂ supera a C₁, por lo que migrar conviene "
+                        "principalmente si el horizonte de uso es corto (antes del punto hallado)."
+                    )
+
+elif sesion == "Sesión 3: Ecuaciones No Lineales":
     st.markdown("---")
     st.subheader("📌 Sesión 3: Método del Punto Fijo, Newton-Raphson y Secante")
-    
+
     metodo = st.sidebar.selectbox("Selecciona el método:", ["Punto Fijo", "Newton-Raphson", "Secante"], index=0)
     opcion = st.sidebar.radio("Usar problema:", ["Problemas de la guía", "Función personalizada"])
-    
+
     if opcion == "Problemas de la guía":
         if metodo == "Punto Fijo":
             st.sidebar.info("Problema 1: Control de temperatura")
@@ -281,7 +445,7 @@ if sesion == "Sesión 3: Ecuaciones No Lineales":
 
     if st.sidebar.button("🚀 Calcular", type="primary", use_container_width=True):
         st.subheader(f"📈 Resultados - Método: {metodo}")
-        
+
         if metodo == "Punto Fijo":
             df, raiz, g_prime_val = punto_fijo(funcion_str, x0, epsilon, max_iter)
             st.success(f"✅ **Raíz encontrada:** {raiz:.6f}")
@@ -298,10 +462,10 @@ if sesion == "Sesión 3: Ecuaciones No Lineales":
             df, raiz = secante(funcion_str, x0, x1, epsilon, max_iter)
             st.success(f"✅ **Raíz encontrada:** {raiz:.6f}")
             st.info(f"📐 **Función:** f(x) = {funcion_str}")
-            
+
         st.markdown("### 📋 Tabla de Iteraciones")
         st.dataframe(df, use_container_width=True)
-        
+
         st.markdown("### 📊 Gráfica de Convergencia")
         col1, col2 = st.columns(2)
         with col1:
@@ -317,13 +481,13 @@ if sesion == "Sesión 3: Ecuaciones No Lineales":
             ax2.set_xlabel('Iteración'); ax2.set_ylabel('Valor de x')
             ax2.set_title('Convergencia de x', fontweight='bold'); ax2.grid(True, alpha=0.3)
             st.pyplot(fig2)
-            
+
         st.markdown("### 🔍 Análisis de Resultados")
         col1, col2, col3 = st.columns(3)
         with col1: st.metric("Iteraciones", len(df))
         with col2: st.metric("Error Final", f"{df['Error %'].iloc[-1]:.6f}%")
         with col3: st.metric("Raíz Aproximada", f"{raiz:.6f}")
-        
+
         if opcion == "Problemas de la guía":
             st.markdown("#### 📝 Interpretación Física")
             if metodo == "Punto Fijo": st.info(f"La temperatura de equilibrio es **{raiz:.2f}°C**.")
@@ -334,10 +498,10 @@ elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
     st.markdown("---")
     st.subheader("📌 Sesión 4: Raíces de Polinomios y Estabilidad de Sistemas")
     st.markdown("Herramienta para la búsqueda de raíces (reales y complejas) mediante el Método de Müller, con deflación automática y análisis en el Plano Z.")
-    
+
     st.sidebar.subheader("🔧 Configuración del Polinomio")
     opcion = st.sidebar.radio("Tipo de entrada:", ["Caso de Estudio: Filtro IIR", "Polinomio Personalizado"])
-    
+
     if opcion == "Caso de Estudio: Filtro IIR":
         st.sidebar.info("Caso de Estudio (Filtro Digital):\n$D(z) = 8z^4 - 6z^3 - 3z^2 + 3z - 1$")
         coeffs_default = [8.0, -6.0, -3.0, 3.0, -1.0]
@@ -358,7 +522,7 @@ elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
     with col1: z0 = st.number_input("z₀ (xi):", value=z0_def, format="%.4f")
     with col2: z1 = st.number_input("z₁ (xi+1):", value=z1_def, format="%.4f")
     with col3: z2 = st.number_input("z₂ (xi+2):", value=z2_def, format="%.4f")
-    
+
     tol = st.sidebar.number_input("Tolerancia (ε):", value=tol_def, format="%.e")
     max_iter = st.sidebar.slider("Máx. iteraciones por raíz:", 10, 100, 50, 5)
 
@@ -367,85 +531,82 @@ elif sesion == "Sesión 4: Raíces de Polinomios (Müller)":
         coeffs_actuales = coeffs_default.copy()
         grado = len(coeffs_actuales) - 1
         raices = []
-        
+
         st.markdown(f"#### 📥 Polinomio de entrada (Grado {grado})")
         st.latex(f"P(z) = {formatear_polinomio_latex(coeffs_actuales)} = 0")
-        
-        # 1. ANÁLISIS PREVIO (DINÁMICO)
+
         st.markdown("### 🧠 1. Delimitación Teórica (Análisis Previo)")
         st.markdown("*Antes de iterar, el sistema aplica teoremas para predecir la naturaleza de las raíces.*")
         c_pos, c_neg = calcular_descartes(coeffs_actuales)
         cota_L = calcular_lagrange(coeffs_actuales)
-        
+
         col_t1, col_t2 = st.columns(2)
         with col_t1:
             st.markdown("**Regla de los Signos de Descartes**")
-            st.markdown(f"- Variaciones en $P(z)$: **{c_pos}** $\implies$ Raíces positivas: **{c_pos}** (o menos en cantidad par).")
-            st.markdown(f"- Variaciones en $P(-z)$: **{c_neg}** $\implies$ Raíces negativas: **{c_neg}** (o menos en cantidad par).")
+            st.markdown(f"- Variaciones en $P(z)$: **{c_pos}** $\\implies$ Raíces positivas: **{c_pos}** (o menos en cantidad par).")
+            st.markdown(f"- Variaciones en $P(-z)$: **{c_neg}** $\\implies$ Raíces negativas: **{c_neg}** (o menos en cantidad par).")
         with col_t2:
             st.markdown("**Cota Superior de Lagrange**")
-            st.markdown(f"- Módulo máximo estimado: **$|z| \le {cota_L:.4f}$**")
+            st.markdown(f"- Módulo máximo estimado: **$|z| \\le {cota_L:.4f}$**")
             st.caption("Garantiza que todas las raíces reales positivas se encuentran dentro de este límite.")
-            
+
         st.markdown("---")
-        
-        # 2. BÚSQUEDA NUMÉRICA
+
         st.markdown("### ⚙️ 2. Búsqueda Numérica (Müller y Deflación)")
-        
+
         for i in range(grado):
             with st.expander(f"🔍 Paso {i+1}: Búsqueda de la Raíz {i+1} (Grado actual: {len(coeffs_actuales)-1})", expanded=(i==0)):
-                if len(coeffs_actuales) == 2: 
+                if len(coeffs_actuales) == 2:
                     raiz = -coeffs_actuales[1] / coeffs_actuales[0]
                     raices.append(raiz)
                     st.success(f"✅ Raíz directa (lineal): **{fmt(raiz)}**")
                     break
-                    
+
                 raiz, df_iter, convergio = muller(coeffs_actuales, z0, z1, z2, tol, max_iter)
-                
+
                 if convergio:
                     st.success(f"✅ Convergió en {len(df_iter)} iteraciones (i = 0 a {len(df_iter)-1}). Raíz encontrada: **{fmt(raiz)}**")
                     raices.append(raiz)
-                    
+
                     st.markdown("**📋 Tabla de Convergencia (formato de clase: i | xi | xi+1 | xi+2 | xi+3 | Error)**")
                     st.dataframe(df_iter, use_container_width=True, hide_index=True)
-                    
+
                     coeffs_actuales = deflacion(coeffs_actuales, raiz)
                     st.info(f"➡️ Polinomio deflacionado resultante: `{[fmt(c) for c in coeffs_actuales]}`")
                 else:
                     st.error("❌ El método no convergió con los parámetros actuales.")
                     break
-                    
+
         st.markdown("---")
-        
-        # 3. ANÁLISIS DE INGENIERÍA
+
         if len(raices) == grado:
             st.markdown("### 📡 3. Análisis de Ingeniería (Estabilidad en el Plano Z)")
             st.markdown("Para que un sistema discreto (como un filtro IIR) sea estable, todos sus polos (raíces) deben estar estrictamente dentro del círculo unitario: **$|z| < 1$**.")
-            
+
             datos, estable = [], True
             for i, r in enumerate(raices):
                 mod = abs(r)
                 if mod >= 1.0: estable = False
                 r_str = f"{r.real:.4f} {'+' if r.imag >= 0 else '-'} {abs(r.imag):.4f}j" if isinstance(r, complex) and abs(r.imag) > 1e-6 else f"{r.real:.4f}"
                 datos.append({"Raíz (Polo)": f"$z_{i+1}$", "Valor": r_str, "Módulo |z|": f"{mod:.5f}", "Estado": "✅ Estable" if mod < 1.0 else "❌ Inestable"})
-                
+
             st.dataframe(pd.DataFrame(datos), use_container_width=True, hide_index=True)
-            
+
             if estable:
                 st.success("🎉 **CONCLUSIÓN DEL SISTEMA:** Todos los polos están dentro del círculo unitario. El sistema es **ESTABLE**.")
             else:
                 st.error("⚠️ **CONCLUSIÓN DEL SISTEMA:** Al menos un polo está fuera o en el borde del círculo unitario. El sistema es **INESTABLE**.")
-            
+
             st.markdown("#### 🌍 Mapa de Polos en el Plano Z")
             fig, ax = plt.subplots(figsize=(6, 6))
             theta = np.linspace(0, 2*np.pi, 100)
             ax.plot(np.cos(theta), np.sin(theta), 'k--', label='Círculo Unitario (|z|=1)')
             ax.fill(np.cos(theta), np.sin(theta), color='green', alpha=0.1)
-            
+
             for i, r in enumerate(raices):
                 ax.plot(r.real, r.imag, 'rx', markersize=10, markeredgewidth=2)
                 ax.text(r.real + 0.05, r.imag + 0.05, f'$z_{i+1}$', fontsize=12, color='red', fontweight='bold')
-                
+
             ax.set_xlabel("Parte Real"); ax.set_ylabel("Parte Imaginaria")
             ax.set_title("Diagrama de Polos"); ax.grid(True, alpha=0.3)
             ax.set_aspect('equal'); ax.legend()
